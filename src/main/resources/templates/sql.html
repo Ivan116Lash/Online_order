@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Executor</title>
+</head>
+<body>
+
+    <h1>Execute SQL Query</h1>
+    
+    <!-- Форма для ввода SQL-запроса -->
+    <form action="/sql" method="post">
+        <label for="sqlQuery">Enter SQL Command:</label><br>
+        <input type="text" name="sqlQuery" id="sqlQuery" placeholder="Example: insert table products (id='1', name='iPhone', price='999.99')" required/><br>
+        <button type="submit">Execute</button>
+    </form>
+
+    <!-- Вывод ошибки или успешных данных -->
+    <div>
+        <h2>Result</h2>
+        <p th:if="${error}" th:text="${error}">Error</p>
+        <table th:if="${headers}">
+            <thead>
+                <tr>
+                    <th th:each="header : ${headers}" th:text="${header}">Header</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="row : ${results}">
+                    <td th:each="column : ${row}" th:text="${column}">Column</td>
+                </tr>
+            </tbody>
+        </table>
+        <p th:if="${success}" th:text="${success}">Success</p>
+    </div>
+
+</body>
+</html>
+
+<!--
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>SQL Executor</title>
+</head>
+<body>
+    <h1>SQL Executor</h1>
+
+    <form action="/sql" method="post">
+        <textarea name="sqlQuery" rows="4" cols="50" placeholder="Введите SQL-запрос..."></textarea><br>
+        <button type="submit">Выполнить</button>
+    </form>
+
+    <div th:if="${error != null}">
+        <p style="color: red;" th:text="${error}"></p>
+    </div>
+
+    <div th:if="${message != null}">
+        <p th:text="${message}"></p>
+    </div>
+
+    <div th:if="${headers != null}">
+        <table border="1">
+            <thead>
+                <tr>
+                    <th th:each="header : ${headers}" th:text="${header}"></th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="row : ${rows}">
+                    <td th:each="column : ${row}" th:text="${column}"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
+-->
