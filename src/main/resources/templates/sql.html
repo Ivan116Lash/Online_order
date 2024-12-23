@@ -1,80 +1,148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Executor</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f7f7f7;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 600px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:active {
+            background-color: #388e3c;
+        }
+
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .message {
+            color: #333;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f4f4f4;
+            color: #555;
+        }
+
+        td {
+            background-color: #fafafa;
+        }
+
+        .back-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+        }
+
+        .back-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h1>SQL Executor</h1>
 
-    <h1>Execute SQL Query</h1>
-    
-    <!-- Форма для ввода SQL-запроса -->
-    <form action="/sql" method="post">
-        <label for="sqlQuery">Enter SQL Command:</label><br>
-        <input type="text" name="sqlQuery" id="sqlQuery" placeholder="Example: insert table products (id='1', name='iPhone', price='999.99')" required/><br>
-        <button type="submit">Execute</button>
-    </form>
+        <form action="/sql" method="post">
+            <textarea name="sqlQuery" rows="4" placeholder="Введіть SQL-запит..."></textarea><br>
+            <button type="submit">Run</button>
+        </form>
 
-    <!-- Вывод ошибки или успешных данных -->
-    <div>
-        <h2>Result</h2>
-        <p th:if="${error}" th:text="${error}">Error</p>
-        <table th:if="${headers}">
-            <thead>
-                <tr>
-                    <th th:each="header : ${headers}" th:text="${header}">Header</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="row : ${results}">
-                    <td th:each="column : ${row}" th:text="${column}">Column</td>
-                </tr>
-            </tbody>
-        </table>
-        <p th:if="${success}" th:text="${success}">Success</p>
-    </div>
+        <div th:if="${error != null}" class="error">
+            <p th:text="${error}"></p>
+        </div>
 
-</body>
-</html>
+        <div th:if="${message != null}" class="message">
+            <p th:text="${message}"></p>
+        </div>
 
-<!--
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>SQL Executor</title>
-</head>
-<body>
-    <h1>SQL Executor</h1>
+        <div th:if="${headers != null}">
+            <table>
+                <thead>
+                    <tr>
+                        <th th:each="header : ${headers}" th:text="${header}"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="row : ${rows}">
+                        <td th:each="column : ${row}" th:text="${column}"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
-    <form action="/sql" method="post">
-        <textarea name="sqlQuery" rows="4" cols="50" placeholder="Введите SQL-запрос..."></textarea><br>
-        <button type="submit">Выполнить</button>
-    </form>
-
-    <div th:if="${error != null}">
-        <p style="color: red;" th:text="${error}"></p>
-    </div>
-
-    <div th:if="${message != null}">
-        <p th:text="${message}"></p>
-    </div>
-
-    <div th:if="${headers != null}">
-        <table border="1">
-            <thead>
-                <tr>
-                    <th th:each="header : ${headers}" th:text="${header}"></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="row : ${rows}">
-                    <td th:each="column : ${row}" th:text="${column}"></td>
-                </tr>
-            </tbody>
-        </table>
+        <a href="/login" class="back-button">Повернутися на сторінку Login</a>
     </div>
 </body>
 </html>
--->
