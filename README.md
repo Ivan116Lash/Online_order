@@ -6,15 +6,14 @@
 - run -> exception
 - comment openai deps in pom.xml -> run -> no exception
 
-2. Запусти pgAdmin та завантаж туди БД з файлу sql_schema/my_data_Custom .sql
+2. Запусти pgAdmin та завантаж туди БД з файлу sql_schema/my_data_Custom.sql
 
-3. Налаштувати доступ до БД у програмі Java. Заповнити своїми налаштуваннями в pgAdmin.
+3. Налаштувати доступ до БД у консолі IDE. Заповнити своїми налаштуваннями в pgAdmin.
 
-- application.properties:
+- консолі IDE:
   ```
-  spring.datasource.url=jdbc:postgresql://localhost:5432/my_date
-  spring.datasource.username=username 
-  spring.datasource.password=password
+  $env:DB_LOGIN="your_db_username"
+  $env:DB_PASSWORD="your_password"
   ```
 
 4. install db plugin to IDE OR use other client
@@ -36,7 +35,7 @@
 - Команди:
   ```
   read table nametable (id);
-  insert table nametable (id='?', . . .);
-  delete table nametable (id='?');
-  update table nametable (id='?', . . .);
+  insert table nametable (id=?, . . .);
+  delete table nametable (id=?);
+  update table nametable (id=?, . . .);
   ```

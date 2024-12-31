@@ -1,6 +1,9 @@
 package ua.cn.stu.univer03.debt;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -73,13 +76,15 @@ public class SQLExecutorController {
     }
 
     private String handleRead(String table, Model model) {
-        if("users".equals(table)){
-            if("ADMIN".equals(globalVariable.getGlobalVar())){
-
-            }else{
-                return "/error-403";
-            }
+        List<String> allowedTables = List.of("users", "orders", "products", "sellers");
+        if (!allowedTables.contains(table)) {
+            return "/error-403"; // Если таблица не разрешена, возвращаем ошибку
         }
+
+        if ("users".equals(table) && !"ADMIN".equals(globalVariable.getGlobalVar())) {
+            return "/error-403";
+        }
+
         // Перевіряємо тип таблиці та виконуємо відповідний SQL-запит
         String sql = "SELECT * FROM " + table;
         List<Map<String, Object>> results = jdbcTemplate.queryForList(sql);
@@ -107,11 +112,11 @@ public class SQLExecutorController {
         if("ADMIN".equals(globalVariable.getGlobalVar())){
         switch (table.toLowerCase()) {
             case "sellers":
-                return handleInsertSellers(data, model);
+                return handleInsertOnl(table, data, model);
             case "products":
-                return handleInsertProducts(data, model);
+                return handleInsertOnl(table, data, model);
             case "sales":
-                return handleInsertSales(data, model);
+                return handleInsertOnl(table, data, model);
             case "users":
                 return handleInsertUsers(data, model);
             default:
@@ -123,133 +128,80 @@ public class SQLExecutorController {
         }
     }
 
-    private String handleInsertSellers(String data, Model model) {
+    private String handleInsertOnl(String table, String data, Model model) {
         try {
-            // Разбираем данные для вставки в таблицу sellers
-            String[] fields = data.split(",");
-            String[] columns = new String[fields.length];
-            String[] values = new String[fields.length];
-    
+            
+            String[] fields = data.split(",");  // Розділяємо рядок на окремі пари 'ключ=значення'
+            String[] columns = new String[fields.length];  // Масив для зберігання назв стовпців
+            Object[] values = new Object[fields.length];  // Масив для значень, що будуть вставлені
+            
             for (int i = 0; i < fields.length; i++) {
-                String[] field = fields[i].split("=");
-                columns[i] = field[0].trim();
-                String value = field[1].trim().replace("'", "");
-    
-                // Проверяем, является ли значение строкой (нужно добавить кавычки)
-                // Регулярное выражение позволяет буквы, цифры и символы, такие как @ и точка для email
-                if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Теперь разрешены буквы, цифры, @, точка, запятая и дефис
-                    value = "'" + value + "'"; // Добавляем кавычки для строковых значений
-                } else if (value.matches("[0-9]+")) { // Если это цифра
-                    // Оставляем как есть
-                } else {
-                    // Для других типов данных можно добавить дополнительную проверку или исключение
-                    throw new IllegalArgumentException("Invalid value format: " + value);
+                String[] field = fields[i].split("=");  // Розділяємо кожен елемент на стовпець і значення
+                columns[i] = field[0].trim();  // Записуємо назву стовпця
+                
+                String value = field[1].trim();  // Значення, яке потрібно вставити в таблицю
+                
+                // Перевірка, чи є це поле 'id', 'seller_id', 'product_id', або 'quantity'
+                if (columns[i].equals("id") || columns[i].equals("seller_id") || columns[i].equals("product_id") || columns[i].equals("quantity")) {
+                    values[i] = Integer.parseInt(value);  // Перетворюємо значення в ціле число для полів
+                } 
+                // Додаємо перевірку для дати
+                else if (columns[i].equals("sale_date")) {
+                    // Перетворюємо дату у формат 'yyyy-MM-dd' в java.sql.Date
+                    values[i] = java.sql.Date.valueOf(value);  
                 }
-    
-                values[i] = value; // Присваиваем обработанное значение
+                // Перевірка для поля 'price' - перетворення на число з плаваючою точкою
+                else if (columns[i].equals("price")) {
+                    values[i] = Double.parseDouble(value);  // Перетворюємо значення в число з плаваючою точкою для 'price'
+                } 
+                else {
+                    values[i] = value;  // Для інших полів зберігаємо значення як рядок
+                }
             }
-    
+            
+            // Створюємо частину SQL запиту зі списком стовпців
             String columnList = String.join(", ", columns);
-            String valueList = String.join(", ", values);
+            
+            // Створюємо заповнювачі для значень ('?' для кожного значення)
+            String placeholders = String.join(", ", Collections.nCopies(columns.length, "?"));
     
-            String sql = "INSERT INTO sellers (" + columnList + ") VALUES (" + valueList + ")";
-            jdbcTemplate.update(sql); // Выполняем запрос
+            String sql;
+
+            // Використовуємо параметризований запит для безпеки
+            switch (table.toLowerCase()) {
+                case "sellers":
+                    sql = "INSERT INTO sellers (" + columnList + ") VALUES (" + placeholders + ")";
+                    break;
+                case "products":
+                    sql = "INSERT INTO products (" + columnList + ") VALUES (" + placeholders + ")";
+                    break;
+                case "sales":
+                    sql = "INSERT INTO sales (" + columnList + ") VALUES (" + placeholders + ")";
+                    break;
+                default:
+                    model.addAttribute("error", "Unsupported table for delete.");
+                    return "sql";
+            }
+            
+            jdbcTemplate.update(sql, values);  // Передаємо значення як параметри запиту
     
             model.addAttribute("message", "Record inserted successfully.");
         } catch (Exception e) {
             model.addAttribute("error", "Error executing insert SQL: " + e.getMessage());
         }
-        return "sql";
+        return "sql";  // Повертаємо представлення
     }
     
-    
-
-    private String handleInsertProducts(String data, Model model) {
-        try {
-            // Розбираємо дані для вставки в таблицю sellers
-            String[] fields = data.split(",");
-            String[] columns = new String[fields.length];
-            String[] values = new String[fields.length];
-    
-            for (int i = 0; i < fields.length; i++) {
-                String[] field = fields[i].split("=");
-                columns[i] = field[0].trim();
-                String value = field[1].trim();
-    
-                // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-                if (value.matches("[A-Za-z]+")) { // Якщо це рядок
-                    values[i] = "'" + value + "'"; // Додаємо лапки
-                } else {
-                    values[i] = value; // Якщо це не рядок, залишаємо як є
-                }
-            }
-    
-            String columnList = String.join(", ", columns);
-            String valueList = String.join(", ", values);
-    
-            String sql = "INSERT INTO products (" + columnList + ") VALUES (" + valueList + ")";
-            jdbcTemplate.update(sql);
-    
-            model.addAttribute("message", "Record inserted successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing insert SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-    
-
-    private String handleInsertSales(String data, Model model) {
-        try {
-            // Розбираємо дані для вставки в таблицю sales
-            String[] fields = data.split(",");
-            String[] columns = new String[fields.length];
-            String[] values = new String[fields.length];
-    
-            for (int i = 0; i < fields.length; i++) {
-                String[] field = fields[i].split("=");
-                columns[i] = field[0].trim();
-                String value = field[1].trim().replace("'", "");
-    
-                // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-                // Регулярний вираз дозволяє букви, цифри та символи, такі як @ та точка для email
-                if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Рядки (email, імена тощо)
-                    value = "'" + value + "'"; // Додаємо лапки для рядкових значень
-                } else if (value.matches("[0-9]+")) { // Цифри
-                    // Залишаємо як є
-                } else {
-                    // Для інших типів даних можна додати додаткову перевірку або виключення
-                    throw new IllegalArgumentException("Invalid value format: " + value);
-                }
-    
-                values[i] = value; // Привласнюємо оброблене значення
-            }
-    
-            // Збираємо рядок з іменами стовпців та значеннями
-            String columnList = String.join(", ", columns);
-            String valueList = String.join(", ", values);
-    
-            // Будуємо SQL-запит
-            String sql = "INSERT INTO sales (" + columnList + ") VALUES (" + valueList + ")";
-            jdbcTemplate.update(sql); // Виконуємо запит
-    
-            model.addAttribute("message", "Record inserted successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing insert SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-    
-
     private String handleDelete(String table, String data, Model model) {
 
         if("ADMIN".equals(globalVariable.getGlobalVar())){
         switch (table.toLowerCase()) {
             case "sellers":
-                return handleDeleteSellers(data, model);
+                return handleDeleteOnl(table, data, model);
             case "products":
-                return handleDeleteProducts(data, model);
+                return handleDeleteOnl(table, data, model);
             case "sales":
-                return handleDeleteSales(data, model);
+                return handleDeleteOnl(table, data, model);
             case "users":
                 return handleDeleteUsers(data, model);
             default:
@@ -261,7 +213,7 @@ public class SQLExecutorController {
         }
     }
 
-    private String handleDeleteSellers(String data, Model model) {
+    private String handleDeleteOnl(String table, String data, Model model) {
         try {
             // Розбираємо дані для видалення з таблиці sellers
             String[] fields = data.split(",");
@@ -279,68 +231,25 @@ public class SQLExecutorController {
                 model.addAttribute("error", "Invalid ID format: must be a number.");
                 return "sql";
             }
+            String sql;
 
-            String sql = "DELETE FROM sellers WHERE id = " + id;
-            jdbcTemplate.update(sql);
-
-            model.addAttribute("message", "Record deleted successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing delete SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-
-    private String handleDeleteProducts(String data, Model model) {
-        try {
-            // Розбираємо дані для видалення з таблиці products
-            String[] fields = data.split(",");
-            String id = null;
-            for (String field : fields) {
-                String[] pair = field.split("=");
-                if (pair[0].trim().equalsIgnoreCase("id")) {
-                    id = pair[1].trim().replace("'", "");
+            // Використовуємо параметризований запит для безпеки
+            switch (table.toLowerCase()) {
+                case "sellers":
+                    sql = "DELETE FROM sellers WHERE id = ?";
                     break;
-                }
-            }
-    
-            // Перевіряємо, що ID - це число
-            if (id == null || !id.matches("\\d+")) {
-                model.addAttribute("error", "Invalid ID format: must be a number.");
-                return "sql";
-            }
-    
-            // Формуємо запит для видалення
-            String sql = "DELETE FROM products WHERE id = " + id;
-            jdbcTemplate.update(sql);
-    
-            model.addAttribute("message", "Record deleted successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing delete SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-
-    private String handleDeleteSales(String data, Model model) {
-        try {
-            // Розбираємо дані для видалення з таблиці sales
-            String[] fields = data.split(",");
-            String id = null;
-            for (String field : fields) {
-                String[] pair = field.split("=");
-                if (pair[0].trim().equalsIgnoreCase("id")) {
-                    id = pair[1].trim().replace("'", "");
+                case "products":
+                    sql = "DELETE FROM products WHERE id = ?";
                     break;
-                }
+                case "sales":
+                    sql = "DELETE FROM sales WHERE id = ?";
+                    break;
+                default:
+                    model.addAttribute("error", "Unsupported table for delete.");
+                    return "sql";
             }
 
-            // Перевіряємо, що ID - це число
-            if (id == null || !id.matches("\\d+")) {
-                model.addAttribute("error", "Invalid ID format: must be a number.");
-                return "sql";
-            }
-
-            String sql = "DELETE FROM sales WHERE id = " + id;
-            jdbcTemplate.update(sql);
+            jdbcTemplate.update(sql, Integer.parseInt(id));  // Передаємо ID як параметр
 
             model.addAttribute("message", "Record deleted successfully.");
         } catch (Exception e) {
@@ -348,17 +257,18 @@ public class SQLExecutorController {
         }
         return "sql";
     }
+
 
     private String handleUpdate(String table, String data, Model model) {
 
         if("ADMIN".equals(globalVariable.getGlobalVar())){
         switch (table.toLowerCase()) {
             case "sellers":
-                return handleUpdateSellers(data, model);
+                return handleUpdateOnl(table, data, model);
             case "products":
-                return handleUpdateProducts(data, model);
+                return handleUpdateOnl(table, data, model);
             case "sales":
-                return handleUpdateSales(data, model);
+                return handleUpdateOnl(table, data, model);
             case "users":
                 return handleUpdateUsers(data, model);
             default:
@@ -370,12 +280,13 @@ public class SQLExecutorController {
         }
     }
 
-    private String handleUpdateSellers(String data, Model model) {
+    private String handleUpdateOnl(String table, String data, Model model) {
         try {
             // Розбираємо дані для оновлення у таблиці sellers
             String[] fields = data.split(",");
             String id = null;
             List<String> assignments = new ArrayList<>();
+            List<Object> values = new ArrayList<>();  // Список для значень (параметрів)
     
             for (String field : fields) {
                 String[] pair = field.split("=");
@@ -385,94 +296,22 @@ public class SQLExecutorController {
                 if (column.equalsIgnoreCase("id")) {
                     id = value; // Зберігаємо ID для умови
                 } else {
-                    // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-                    if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Рядки (наприклад, email)
-                        value = "'" + value + "'"; // Додаємо лапки для рядкових значень
+                    // Перевіряємо, чи є значення числом
+                    if (column.equals("id") || column.equals("seller_id") || column.equals("product_id") || column.equals("quantity")) {
+                        values.add(Integer.parseInt(value)); // Якщо число, додаємо в список як ціле
+                    } 
+                    // Перевірка для дати
+                    else if (column.equals("sale_date")) {
+                        values.add(java.sql.Date.valueOf(value)); // Якщо дата, додаємо в список як java.sql.Date
                     }
-                    assignments.add(column + " = " + value); // Додаємо поле та значення
-                }
-            }
-    
-            // Перевірка: ID має бути вказано і бути числом
-            if (id == null || !id.matches("\\d+")) {
-                model.addAttribute("error", "Invalid or missing ID in the update command.");
-                return "sql";
-            }
-    
-            // Формуємо SQL-запит
-            String setClause = String.join(", ", assignments);
-            String sql = "UPDATE sellers SET " + setClause + " WHERE id = " + id;
-    
-            // Виконуємо запит
-            jdbcTemplate.update(sql);
-    
-            model.addAttribute("message", "Record updated successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing update SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-    
-
-    private String handleUpdateProducts(String data, Model model) {
-        try {
-            // Розбираємо дані для оновлення у таблиці
-            String[] fields = data.split(",");
-            String id = null;
-            List<String> assignments = new ArrayList<>();
-    
-            for (String field : fields) {
-                String[] pair = field.split("=");
-                String column = pair[0].trim();
-                String value = pair[1].trim();
-    
-                if (column.equalsIgnoreCase("id")) {
-                    id = value.replace("'", ""); // Зберігаємо ID для умови
-                } else {
-                    assignments.add(column + " = " + value); // Додаємо поле та значення
-                }
-            }
-    
-            // Перевірка: ID має бути вказано і бути числом
-            if (id == null || !id.matches("\\d+")) {
-                model.addAttribute("error", "Invalid or missing ID in the update command.");
-                return "sql";
-            }
-    
-            // Формуємо SQL-запит
-            String setClause = String.join(", ", assignments);
-            String sql = "UPDATE products SET " + setClause + " WHERE id = " + id;
-    
-            // Виконуємо запит
-            jdbcTemplate.update(sql);
-    
-            model.addAttribute("message", "Record updated successfully.");
-        } catch (Exception e) {
-            model.addAttribute("error", "Error executing update SQL: " + e.getMessage());
-        }
-        return "sql";
-    }
-    
-    private String handleUpdateSales(String data, Model model) {
-        try {
-            // Розбираємо дані для оновлення у таблиці sales
-            String[] fields = data.split(",");
-            String id = null;
-            List<String> assignments = new ArrayList<>();
-    
-            for (String field : fields) {
-                String[] pair = field.split("=");
-                String column = pair[0].trim();
-                String value = pair[1].trim().replace("'", "");
-    
-                if (column.equalsIgnoreCase("id")) {
-                    id = value; // Зберігаємо ID для умови
-                } else {
-                    // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-                    if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Рядки (наприклад, email)
-                        value = "'" + value + "'"; // Додаємо лапки для рядкових значень
+                    // Перевірка для ціни
+                    else if (column.equals("price")) {
+                        values.add(Double.parseDouble(value)); // Якщо ціна, додаємо в список як число з плаваючою точкою
+                    } 
+                    else {
+                        values.add(value); // Для інших значень додаємо як рядок
                     }
-                    assignments.add(column + " = " + value); // Додаємо поле та значення
+                    assignments.add(column + " = ?"); // Додаємо поле та місце для параметра
                 }
             }
     
@@ -482,12 +321,30 @@ public class SQLExecutorController {
                 return "sql";
             }
     
-            // Формуємо SQL-запит
+            // Формуємо SQL-запит з параметризованими значеннями
             String setClause = String.join(", ", assignments);
-            String sql = "UPDATE sales SET " + setClause + " WHERE id = " + id;
+            String sql;
     
-            // Виконуємо запит
-            jdbcTemplate.update(sql);
+            switch (table.toLowerCase()) {
+                case "sellers":
+                    sql = "UPDATE sellers SET " + setClause + " WHERE id = ?";
+                    break;
+                case "products":
+                    sql = "UPDATE products SET " + setClause + " WHERE id = ?";
+                    break;
+                case "sales":
+                    sql = "UPDATE sales SET " + setClause + " WHERE id = ?";
+                    break;
+                default:
+                    model.addAttribute("error", "Unsupported table for update.");
+                    return "sql";
+            }
+    
+            // Додаємо ID до параметрів
+            values.add(Integer.parseInt(id));
+    
+            // Виконуємо запит з параметрами
+            jdbcTemplate.update(sql, values.toArray());
     
             model.addAttribute("message", "Record updated successfully.");
         } catch (Exception e) {
@@ -495,6 +352,7 @@ public class SQLExecutorController {
         }
         return "sql";
     }
+    
 
     // Додавання запису до таблиці users
 private String handleInsertUsers(String data, Model model) {
@@ -502,30 +360,39 @@ private String handleInsertUsers(String data, Model model) {
         // Розбираємо дані для вставки в таблицю users
         String[] fields = data.split(",");
         String[] columns = new String[fields.length];
-        String[] values = new String[fields.length];
+        List<Object> values = new ArrayList<>();  // Список для значень (параметрів)
 
         for (int i = 0; i < fields.length; i++) {
             String[] field = fields[i].split("=");
-            columns[i] = field[0].trim();
+            String column = field[0].trim();
             String value = field[1].trim().replace("'", "");
 
-            // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-            if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Рядки (наприклад, email, імена)
-                value = "'" + value + "'"; // Додаємо лапки для рядкових значень
-            } else if (value.matches("[0-9]+")) { // Якщо це цифра
-                // Залишаємо як є
-            } else {
-                throw new IllegalArgumentException("Invalid value format: " + value);
-            }
+            // Зберігаємо стовпець
+            columns[i] = column;
 
-            values[i] = value; // Привласнюємо оброблене значення
+            // Перевірка для поля 'id'
+            if (column.equals("id")) {
+                values.add(Integer.parseInt(value));  // Перетворюємо значення в ціле число для полів 'id'
+            } 
+            else if (column.equals("password")) {
+                values.add(encodeBase64(value));  // Кодуємо пароль в base64
+            } 
+            else {
+                values.add(value);  // Для інших полів додаємо значення як рядок
+            }
         }
 
+        // Створюємо частину SQL запиту зі списком стовпців
         String columnList = String.join(", ", columns);
-        String valueList = String.join(", ", values);
 
-        String sql = "INSERT INTO users (" + columnList + ") VALUES (" + valueList + ")";
-        jdbcTemplate.update(sql); // Виконуємо запит
+        // Створюємо заповнювачі для значень ('?' для кожного значення)
+        String placeholders = String.join(", ", Collections.nCopies(columns.length, "?"));
+
+        // Формуємо SQL-запит
+        String sql = "INSERT INTO users (" + columnList + ") VALUES (" + placeholders + ")";
+
+        // Використовуємо параметризований запит для безпеки
+        jdbcTemplate.update(sql, values.toArray());
 
         model.addAttribute("message", "User record inserted successfully.");
     } catch (Exception e) {
@@ -533,6 +400,11 @@ private String handleInsertUsers(String data, Model model) {
     }
     return "sql";
 }
+
+    // Функція для кодування в base64
+    private String encodeBase64(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
 
 // Видалення запису з таблиці users
 private String handleDeleteUsers(String data, Model model) {
@@ -548,13 +420,15 @@ private String handleDeleteUsers(String data, Model model) {
             }
         }
 
+        // Перевірка: ID має бути вказано і бути числом
         if (id == null || !id.matches("\\d+")) {
             model.addAttribute("error", "Invalid ID format: must be a number.");
             return "sql";
         }
 
-        String sql = "DELETE FROM users WHERE id = " + id;
-        jdbcTemplate.update(sql);
+        // Використовуємо параметризований запит для безпеки
+        String sql = "DELETE FROM users WHERE id = ?";
+        jdbcTemplate.update(sql, Integer.parseInt(id));
 
         model.addAttribute("message", "User record deleted successfully.");
     } catch (Exception e) {
@@ -563,6 +437,7 @@ private String handleDeleteUsers(String data, Model model) {
     return "sql";
 }
 
+
 // Оновлення запису в таблиці users
 private String handleUpdateUsers(String data, Model model) {
     try {
@@ -570,6 +445,7 @@ private String handleUpdateUsers(String data, Model model) {
         String[] fields = data.split(",");
         String id = null;
         List<String> assignments = new ArrayList<>();
+        List<Object> values = new ArrayList<>();  // Список для значень (параметрів)
 
         for (String field : fields) {
             String[] pair = field.split("=");
@@ -579,11 +455,17 @@ private String handleUpdateUsers(String data, Model model) {
             if (column.equalsIgnoreCase("id")) {
                 id = value; // Зберігаємо ID для умови
             } else {
-                // Перевіряємо, чи є значення рядком (потрібно додати лапки)
-                if (value.matches("[A-Za-zА-Яа-яЁё0-9@._,\\- ]+")) { // Рядки (наприклад, email)
-                    value = "'" + value + "'"; // Додаємо лапки для рядкових значень
+                // Перевіряємо, чи є значення числом
+                if (column.equals("id")) {
+                    values.add(Integer.parseInt(value)); // Якщо число, додаємо в список як ціле
                 }
-                assignments.add(column + " = " + value); // Додаємо поле та значення
+                else if (column.equals("password")) {
+                    values.add(encodeBase64(value));  // Кодуємо пароль в base64
+                } 
+                else {
+                    values.add(value); // Для інших значень додаємо як рядок
+                }
+                assignments.add(column + " = ?"); // Додаємо поле та місце для параметра
             }
         }
 
@@ -593,10 +475,17 @@ private String handleUpdateUsers(String data, Model model) {
             return "sql";
         }
 
+        // Формуємо частину SQL запиту зі списком полів
         String setClause = String.join(", ", assignments);
-        String sql = "UPDATE users SET " + setClause + " WHERE id = " + id;
-
-        jdbcTemplate.update(sql);
+        
+        // Створюємо SQL запит
+        String sql = "UPDATE users SET " + setClause + " WHERE id = ?";
+        
+        // Додаємо ID до значень
+        values.add(Integer.parseInt(id));
+        
+        // Виконуємо параметризований запит
+        jdbcTemplate.update(sql, values.toArray());
 
         model.addAttribute("message", "User record updated successfully.");
     } catch (Exception e) {
@@ -604,6 +493,7 @@ private String handleUpdateUsers(String data, Model model) {
     }
     return "sql";
 }
+
 
     
 }

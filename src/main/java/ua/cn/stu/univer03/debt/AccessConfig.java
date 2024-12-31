@@ -1,5 +1,7 @@
 package ua.cn.stu.univer03.debt;
 
+import java.util.Base64;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -20,19 +22,21 @@ public class AccessConfig {
     // Маршрут для відображення сторінки з формою
     @GetMapping("/login")
     public String showSqlPage() {
-        
         return "/login"; // Повертає ім'я шаблону для відображення форми
     }
 
     // Маршрут для обробки SQL-запиту
     @PostMapping("/login")
     public String processLoginForm(@RequestParam String username, @RequestParam String password, Model model) {
+        // Перетворюємо введений пароль в Base64
+        String encodedPassword = encodeBase64(password);
+
         // Приклад SQL-запиту для перевірки користувача
         String query = "SELECT password FROM users WHERE username = ?";
         
         try {
             String storedPassword = jdbcTemplate.queryForObject(query, String.class, username);
-            if (storedPassword != null && storedPassword.equals(password)) {
+            if (storedPassword != null && storedPassword.equals(encodedPassword)) {
                 // Отримуємо роль користувача
                 String roleQuery = "SELECT role FROM users WHERE username = ?";
                 String role = jdbcTemplate.queryForObject(roleQuery, String.class, username);
@@ -40,7 +44,7 @@ public class AccessConfig {
                 // Встановлюємо значення ролі у глобальну змінну
                 globalVariable.setGlobalVar(role);
                 // Успішний вхід
-                return "redirect:/sql"; // Перенаправление на другую страницу
+                return "redirect:/sql"; // Перенаправлення на іншу сторінку
             } else {
                 // Невірний пароль
                 model.addAttribute("error", "Invalid username or password");
@@ -49,11 +53,16 @@ public class AccessConfig {
                 return "/error-401"; // Повернення до сторінки входу з повідомленням про помилку
             }
         } catch (EmptyResultDataAccessException e) {
-            // Користувач не знайдено
+            // Користувач не знайдений
             model.addAttribute("error", "User not found");
             String invat = "Initial Value";
             globalVariable.setGlobalVar(invat);
             return "/error-401"; // Повертаємо ім'я шаблону для відображення результату
         }
+    }
+
+    // Функція для кодування пароля в base64
+    private String encodeBase64(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes());
     }
 }
